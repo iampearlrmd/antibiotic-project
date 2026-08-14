@@ -1,7 +1,7 @@
 strain,condition,CFU_per_ml,repair_gene,description
 PY012,no_drug,2395000,wild-type,Full DNA repair capability (recA+ addA+)
 PY001,no_drug,720000,recA-,Missing RecA repair protein
-MA001,no_drug,610000,addA-,Missing AddA repair protein
+MA012,no_drug,610000,addA-,Missing AddA repair protein
 PY012,norfloxacin,2395000,wild-type,Survived antibiotic attack (reference)
 PY001,norfloxacin,720000,recA-,Reduced survival without RecA
-MA001,norfloxacin,610000,addA-,Lowest survival without AddA
+MA012,norfloxacin,610000,addA-,Lowest survival without AddA
