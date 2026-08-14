@@ -1,6 +1,6 @@
 # analysis.py
 # Bacterial DNA Repair vs Antibiotic Attack
-# Author: [Your Name]
+# Author: [Ramida Rakkhatiwong]
 # Project: Connecting biological defense mechanisms to cybersecurity resilience
 
 import csv
