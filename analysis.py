@@ -22,10 +22,15 @@ Writes plots to ./figures/:
 EXPECTED CSV SCHEMA
 --------------------------------------------------------------------------
 growth_curve.csv (long format, one row per reading):
-    time_min, strain, treatment, replicate, od600
+    time_min, strain, experiment, group, replicate, od600
 
     strain      : PY012 | PY001 | MA012
-    treatment   : control | norfloxacin | ciprofloxacin
+    experiment  : baseline | norfloxacin | ciprofloxacin
+                  (baseline = Figure 5, no antibiotic at all;
+                   norfloxacin/ciprofloxacin = Figures 6/7, each of which
+                   plots BOTH a treated and a control line per strain)
+    group       : control | treated
+                  (for experiment="baseline", group is always "control")
     replicate   : 1..n (biological replicate number)
     od600       : float
 
@@ -69,7 +74,8 @@ PLATED_VOLUME_ML = 0.1
 GROWTH_COLUMN_MAP = {
     "time_min": "time_min",
     "strain": "strain",
-    "treatment": "treatment",
+    "experiment": "experiment",
+    "group": "group",
     "replicate": "replicate",
     "od600": "od600",
 }
@@ -123,7 +129,7 @@ def load_growth_curve(path: Path = GROWTH_CURVE_CSV) -> pd.DataFrame:
     df = _load_csv(
         path,
         GROWTH_COLUMN_MAP,
-        required=["time_min", "strain", "treatment", "od600"],
+        required=["time_min", "strain", "experiment", "group", "od600"],
     )
     df["time_min"] = pd.to_numeric(df["time_min"], errors="coerce")
     df["od600"] = pd.to_numeric(df["od600"], errors="coerce")
@@ -165,33 +171,51 @@ def load_cfu_data(path: Path = CFU_CSV) -> pd.DataFrame:
 # PLOTTING - growth curves (Figures 5, 6, 7)
 # --------------------------------------------------------------------------
 
-def plot_growth_curve(df: pd.DataFrame, treatment: str, title: str, out_path: Path):
+def plot_growth_curve(df: pd.DataFrame, experiment: str, title: str, out_path: Path):
     """
-    Plots mean OD600 vs. time for each strain under a given treatment,
-    with error bars (SD across replicates) when replicate data is present.
+    Plots mean OD600 vs. time for each strain under a given experiment.
+
+    For "baseline" (Figure 5) this draws one line per strain (no drug).
+    For "norfloxacin"/"ciprofloxacin" (Figures 6/7) this draws BOTH the
+    treated and control line per strain (solid = control/no-drug,
+    dashed = treated), matching the six-line layout in the report.
+
+    Error bars (SD across replicates) are drawn automatically whenever
+    more than one replicate exists for a given time point.
     """
-    subset = df[df["treatment"] == treatment]
+    subset = df[df["experiment"] == experiment]
     if subset.empty:
-        print(f"Skipping '{title}': no rows found for treatment='{treatment}'.")
+        print(f"Skipping '{title}': no rows found for experiment='{experiment}'.")
         return
 
     fig, ax = plt.subplots(figsize=(8, 5))
+    groups_present = [g for g in ["control", "treated"] if g in subset["group"].unique()]
 
     for strain in ["PY012", "PY001", "MA012"]:
-        strain_df = subset[subset["strain"] == strain]
-        if strain_df.empty:
-            continue
-        grouped = strain_df.groupby("time_min")["od600"].agg(["mean", "std"]).reset_index()
-        grouped["std"] = grouped["std"].fillna(0)
-        ax.errorbar(
-            grouped["time_min"],
-            grouped["mean"],
-            yerr=grouped["std"],
-            marker="o",
-            capsize=3,
-            label=STRAIN_LABELS[strain],
-            color=STRAIN_COLORS[strain],
-        )
+        for group in groups_present:
+            line_df = subset[(subset["strain"] == strain) & (subset["group"] == group)]
+            if line_df.empty:
+                continue
+            grouped = line_df.groupby("time_min")["od600"].agg(["mean", "std"]).reset_index()
+            grouped["std"] = grouped["std"].fillna(0)
+
+            # Only append a (treated)/(control) qualifier when both groups
+            # are present on the same chart (i.e. not for the baseline plot)
+            label = STRAIN_LABELS[strain]
+            if len(groups_present) > 1:
+                label += " - control" if group == "control" else " - treated"
+
+            ax.errorbar(
+                grouped["time_min"],
+                grouped["mean"],
+                yerr=grouped["std"],
+                marker="o",
+                capsize=3,
+                linestyle="-" if group == "control" else "--",
+                alpha=1.0 if group == "control" else 0.75,
+                label=label,
+                color=STRAIN_COLORS[strain],
+            )
 
     ax.set_title(title)
     ax.set_xlabel("Time (minute)")
@@ -278,7 +302,7 @@ def main():
 
     growth_df = load_growth_curve()
     plot_growth_curve(
-        growth_df, "control",
+        growth_df, "baseline",
         "Growth curves of PY012, PY001, and MA012 strains (no antibiotic)",
         OUTPUT_DIR / "fig5_growth_curve_control.png",
     )
